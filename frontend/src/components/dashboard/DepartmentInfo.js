@@ -48,6 +48,7 @@ const DepartmentInfo = ({ user, employeeData, onDataUpdate }) => {
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [noDepartment, setNoDepartment] = useState(false);
 
   useEffect(() => {
     const user = authService.getCurrentUser();
@@ -55,9 +56,19 @@ const DepartmentInfo = ({ user, employeeData, onDataUpdate }) => {
   }, []);
 
   useEffect(() => {
-    if (user?.employee_did && employeeData?.phong_ban_id) {
-      fetchDepartmentInfo();
+    if (!user?.employee_did) return;
+
+    if (!employeeData?.phong_ban_id) {
+      setDepartment(null);
+      setEmployees([]);
+      setNoDepartment(true);
+      setError(null);
+      setLoading(false);
+      return;
     }
+
+    setNoDepartment(false);
+    fetchDepartmentInfo();
   }, [user?.employee_did, employeeData?.phong_ban_id]);
 
   useEffect(() => {
@@ -70,6 +81,7 @@ const DepartmentInfo = ({ user, employeeData, onDataUpdate }) => {
     try {
       setLoading(true);
       setError(null);
+      setNoDepartment(false);
 
       if (!user || !employeeData?.phong_ban_id) {
         setError('Không tìm thấy thông tin nhân viên');
@@ -79,13 +91,22 @@ const DepartmentInfo = ({ user, employeeData, onDataUpdate }) => {
 
       const departmentId = employeeData.phong_ban_id;
 
-      // Fetch department details and employees
-      const [departmentResponse, employeesResponse] = await Promise.all([
-        apiService.getDepartmentById(departmentId),
-        apiService.getEmployeesByDepartment(departmentId)
-      ]);
+      // Get department details from the list to avoid 404s when the department has been removed
+      const allDepartments = await apiService.getDepartments();
+      const departmentDetails = allDepartments.find(
+        (dept) => dept.phong_ban_id === departmentId
+      );
 
-      setDepartment(departmentResponse);
+      if (!departmentDetails) {
+        setDepartment(null);
+        setEmployees([]);
+        setNoDepartment(true);
+        return;
+      }
+
+      const employeesResponse = await apiService.getEmployeesByDepartment(departmentId);
+
+      setDepartment(departmentDetails);
       setEmployees(employeesResponse);
     } catch (err) {
       console.error('Error fetching department info:', err);
@@ -132,6 +153,14 @@ const DepartmentInfo = ({ user, employeeData, onDataUpdate }) => {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
         {error}
+      </Alert>
+    );
+  }
+
+  if (noDepartment) {
+    return (
+      <Alert severity="info" sx={{ mt: 2 }}>
+        Hiện tại nhân viên chưa thuộc phòng ban nào
       </Alert>
     );
   }
